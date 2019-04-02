@@ -22,7 +22,7 @@ use Symfony\Component\Console\Question\Question;
 Container::setInstance(new Container);
 
 // get current version based on git describe and tags
-$version = new Version('1.0.26' , __DIR__ . '/../');
+$version = new Version('1.0.27' , __DIR__ . '/../');
 
 $app = new Application('Valet+', $version->getVersion());
 
@@ -277,9 +277,23 @@ if (is_dir(VALET_HOME_PATH)) {
      * Start the daemon services.
      */
     $app->command('start [services]*', function ($services) {
-        if(empty($services)) {
+        $phpVersion = false;
+
+        if (!empty($services)) {
+            // Check if services contains a php version so we can switch to it immediately.
+            $phpVersions = array_keys(\Valet\PhpFpm::SUPPORTED_PHP_FORMULAE);
+            $intersect   = array_intersect($services, $phpVersions);
+            $phpVersion  = end($intersect);
+            $services    = array_diff($services, $phpVersions);
+        }
+
+        if (empty($services)) {
             DnsMasq::restart();
-            PhpFpm::restart();
+            if ($phpVersion) {
+                PhpFpm::switchTo($phpVersion);
+            } else {
+                PhpFpm::restart();
+            }
             Nginx::restart();
             Mysql::restart();
             RedisTool::restart();
@@ -288,6 +302,7 @@ if (is_dir(VALET_HOME_PATH)) {
             RabbitMq::restart();
             Varnish::restart();
             info('Valet services have been started.');
+
             return;
         }
 
@@ -303,7 +318,11 @@ if (is_dir(VALET_HOME_PATH)) {
                     break;
                 }
                 case 'php': {
-                    PhpFpm::restart();
+                    if ($phpVersion) {
+                        PhpFpm::switchTo($phpVersion);
+                    } else {
+                        PhpFpm::restart();
+                    }
                     break;
                 }
                 case 'redis': {
