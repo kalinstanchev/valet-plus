@@ -153,7 +153,10 @@ class PhpFpm
             warning('Please check http://php.net/supported-versions.php for more information.');
         }
 
-        $this->brew->ensureInstalled(self::SUPPORTED_PHP_FORMULAE[$version]);
+        $installed = $this->brew->installed(self::SUPPORTED_PHP_FORMULAE[$version]);
+        if (!$installed) {
+            $this->brew->ensureInstalled(self::SUPPORTED_PHP_FORMULAE[$version]);
+        }
 
         info("[" . self::SUPPORTED_PHP_FORMULAE[$currentVersion] . "] Unlinking");
         output($this->cli->runAsUser('brew unlink ' . self::SUPPORTED_PHP_FORMULAE[$currentVersion]));
@@ -343,6 +346,7 @@ class PhpFpm
         $iniPath = $this->iniPath();
         $this->files->ensureDirExists($iniPath, user());
         $this->files->putAsUser($iniPath . 'z-performance.ini', $contents);
+        $this->writePerformanceConfiguration();
 
         // Get php.ini file.
         $extensionDirectory = $this->pecl->getExtensionDirectory();
@@ -359,6 +363,26 @@ class PhpFpm
 
         // Save php.ini file.
         $this->files->putAsUser($phpIniPath, $contents);
+    }
+
+    function writePerformanceConfiguration() {
+        $path = $this->iniPath() . 'z-performance.ini';
+
+        if(file_exists($path)) {
+            return;
+        }
+
+        $systemZoneName = readlink('/etc/localtime');
+        // All versions below High Sierra
+        $systemZoneName = str_replace('/usr/share/zoneinfo/', '', $systemZoneName);
+        // macOS High Sierra has a new location for the timezone info
+        $systemZoneName = str_replace('/var/db/timezone/zoneinfo/', '', $systemZoneName);
+        $contents = $this->files->get(__DIR__ . '/../stubs/z-performance.ini');
+        $contents = str_replace('TIMEZONE', $systemZoneName, $contents);
+
+        $iniPath = $this->iniPath();
+        $this->files->ensureDirExists($iniPath, user());
+        $this->files->putAsUser($path, $contents);
     }
 
     function checkInstallation()

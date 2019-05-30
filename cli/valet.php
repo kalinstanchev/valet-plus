@@ -86,6 +86,9 @@ if (is_dir(VALET_HOME_PATH)) {
             return info(Configuration::read()['domain']);
         }
 
+        Mailhog::updateDomain($domain);
+        Elasticsearch::updateDomain($domain);
+
         DnsMasq::updateDomain(
             $oldDomain = Configuration::read()['domain'], $domain = trim($domain, '.')
         );
@@ -811,6 +814,31 @@ if (is_dir(VALET_HOME_PATH)) {
                 return;
         }
     })->descriptions('Enable / disable Redis');
+
+    $app->command('memcache [mode]', function ($mode) {
+        $modes = ['install', 'uninstall'];
+
+        if (!in_array($mode, $modes)) {
+            throw new Exception('Mode not found. Available modes: '.implode(', ', $modes));
+        }
+
+        if (PhpFpm::linkedPhp() == '5.6') {
+            throw new Exception('Memcache needs php 7.0 or higher, current php version: 5.6');
+        }
+
+        $restart = false;
+        switch ($mode) {
+            case 'install':
+                $restart = Memcache::install();
+                break;
+            case 'uninstall':
+                $restart = Memcache::uninstall();
+                break;
+        }
+        if ($restart) {
+          PhpFpm::restart();
+        }
+    })->descriptions('Install / uninstall Memcache');
 
     $app->command('tower', function () {
         DevTools::tower();
